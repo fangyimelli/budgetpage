@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <base target="_top">
+    <?!= include('Styles'); ?>
+  </head>
+  <body>
+    <div class="app-shell">
+      <section id="loginView" class="view active">
+        <div class="login-card card">
+          <div>
+            <p class="eyebrow">個人預算查詢網站</p>
+            <h1>登入</h1>
+            <p class="subtitle">請使用您的帳號密碼查詢個人預算摘要與明細。</p>
+          </div>
+          <form id="loginForm" class="form-grid">
+            <label>
+              <span>帳號</span>
+              <input type="text" id="account" name="account" autocomplete="username" required>
+            </label>
+            <label>
+              <span>密碼</span>
+              <input type="password" id="password" name="password" autocomplete="current-password" required>
+            </label>
+            <button type="submit" class="primary-btn">登入</button>
+          </form>
+          <p id="loginError" class="message error"></p>
+        </div>
+      </section>
+
+      <section id="appView" class="view">
+        <header class="topbar card">
+          <div>
+            <p class="eyebrow">歡迎使用</p>
+            <h2 id="welcomeName">--</h2>
+            <p id="welcomeMeta" class="subtitle"></p>
+          </div>
+          <div class="topbar-actions">
+            <button type="button" class="secondary-btn" data-view="summary">摘要</button>
+            <button type="button" class="secondary-btn" data-view="details">明細</button>
+            <button type="button" class="ghost-btn" id="logoutBtn">登出</button>
+          </div>
+        </header>
+
+        <main>
+          <section id="summaryPanel" class="panel active">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Summary</p>
+                <h3>預算摘要</h3>
+              </div>
+            </div>
+            <div class="summary-grid">
+              <article class="card info-card">
+                <span class="label">使用者姓名</span>
+                <strong id="summaryName">--</strong>
+              </article>
+              <article class="card info-card">
+                <span class="label">使用者 ID</span>
+                <strong id="summaryUserId">--</strong>
+              </article>
+              <article class="card info-card wide">
+                <span class="label">計畫名稱</span>
+                <strong id="summaryProject">--</strong>
+              </article>
+              <article class="card info-card">
+                <span class="label">業務費</span>
+                <strong id="summaryBudget">--</strong>
+              </article>
+              <article class="card info-card">
+                <span class="label">實支+未核銷</span>
+                <strong id="summarySpent">--</strong>
+              </article>
+              <article class="card info-card">
+                <span class="label">餘額</span>
+                <strong id="summaryBalance">--</strong>
+              </article>
+              <article class="card info-card">
+                <span class="label">支用率</span>
+                <strong id="summaryRate">--</strong>
+              </article>
+            </div>
+          </section>
+
+          <section id="detailsPanel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Details</p>
+                <h3>個人明細</h3>
+              </div>
+            </div>
+            <div class="table-card card">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>實支</th>
+                      <th>日期</th>
+                      <th>傳票</th>
+                      <th>類別</th>
+                      <th>購案編號</th>
+                      <th>金額</th>
+                      <th>說明</th>
+                      <th>狀態</th>
+                    </tr>
+                  </thead>
+                  <tbody id="detailsBody">
+                    <tr>
+                      <td colspan="8" class="empty">尚無資料</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <?!= include('JavaScript'); ?>
+  </body>
+</html>
