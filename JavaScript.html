@@ -32,7 +32,7 @@
         setLoginLoading(false, submitButton);
         errorElement.textContent = getReadableErrorMessage(error);
       })
-      .authenticateUser(account, password);
+      .login(account, password);
   }
 
   function renderApp(data) {
@@ -119,11 +119,10 @@
       ? error
       : (error.message || error.toString() || '系統發生錯誤，請稍後再試。');
 
-    if (/TypeError|Cannot read properties of null|getSheetByName/i.test(message)) {
-      return '系統讀取 Google Sheet 失敗，請確認 users、budget_summary 與使用者分頁是否存在。';
-    }
-
-    return message.replace(/^Error:\s*/, '');
+    return message
+      .replace(/^Error:\s*/, '')
+      .replace(/^Exception:\s*/, '')
+      .trim() || '系統發生錯誤，請稍後再試。';
   }
 
   function safeText(value) {
