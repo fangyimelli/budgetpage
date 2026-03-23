@@ -18,32 +18,39 @@
     const account = document.getElementById('account').value.trim();
     const password = document.getElementById('password').value.trim();
     const errorElement = document.getElementById('loginError');
+    const submitButton = event.submitter || document.querySelector('#loginForm button[type="submit"]');
     errorElement.textContent = '';
+    setLoginLoading(true, submitButton);
 
     google.script.run
       .withSuccessHandler(function (response) {
+        setLoginLoading(false, submitButton);
         state.session = response;
         renderApp(response);
       })
       .withFailureHandler(function (error) {
-        errorElement.textContent = error && error.message ? error.message : '登入失敗，請稍後再試。';
+        setLoginLoading(false, submitButton);
+        errorElement.textContent = getReadableErrorMessage(error);
       })
       .authenticateUser(account, password);
   }
 
   function renderApp(data) {
+    const user = data && data.user ? data.user : {};
+    const summary = data && data.summary ? data.summary : {};
+
     document.getElementById('loginView').classList.remove('active');
     document.getElementById('appView').classList.add('active');
-    document.getElementById('welcomeName').textContent = data.user.name || '使用者';
-    document.getElementById('welcomeMeta').textContent = '使用者 ID：' + safeText(data.user.user_id) + '｜計畫名稱：' + safeText(data.summary.project_name);
+    document.getElementById('welcomeName').textContent = user.name || '使用者';
+    document.getElementById('welcomeMeta').textContent = '使用者 ID：' + safeText(user.user_id) + '｜計畫名稱：' + safeText(summary.project_name);
 
-    document.getElementById('summaryName').textContent = safeText(data.user.name);
-    document.getElementById('summaryUserId').textContent = safeText(data.user.user_id);
-    document.getElementById('summaryProject').textContent = safeText(data.summary.project_name);
-    document.getElementById('summaryBudget').textContent = safeText(data.summary['業務費']);
-    document.getElementById('summarySpent').textContent = safeText(data.summary['實支+未核銷']);
-    document.getElementById('summaryBalance').textContent = safeText(data.summary['餘額']);
-    document.getElementById('summaryRate').textContent = safeText(data.summary['支用率']);
+    document.getElementById('summaryName').textContent = safeText(user.name);
+    document.getElementById('summaryUserId').textContent = safeText(user.user_id);
+    document.getElementById('summaryProject').textContent = safeText(summary.project_name);
+    document.getElementById('summaryBudget').textContent = safeText(summary['業務費']);
+    document.getElementById('summarySpent').textContent = safeText(summary['實支+未核銷']);
+    document.getElementById('summaryBalance').textContent = safeText(summary['餘額']);
+    document.getElementById('summaryRate').textContent = safeText(summary['支用率']);
 
     renderDetails(data.details || []);
     switchPanel('summary');
@@ -93,6 +100,30 @@
     document.getElementById('loginForm').reset();
     document.getElementById('loginError').textContent = '';
     document.getElementById('detailsBody').innerHTML = '<tr><td colspan="8" class="empty">尚無資料</td></tr>';
+  }
+
+  function setLoginLoading(isLoading, button) {
+    if (!button) {
+      return;
+    }
+    button.disabled = isLoading;
+    button.textContent = isLoading ? '登入中...' : '登入';
+  }
+
+  function getReadableErrorMessage(error) {
+    if (!error) {
+      return '系統發生錯誤，請稍後再試。';
+    }
+
+    const message = typeof error === 'string'
+      ? error
+      : (error.message || error.toString() || '系統發生錯誤，請稍後再試。');
+
+    if (/TypeError|Cannot read properties of null|getSheetByName/i.test(message)) {
+      return '系統讀取 Google Sheet 失敗，請確認 users、budget_summary 與使用者分頁是否存在。';
+    }
+
+    return message.replace(/^Error:\s*/, '');
   }
 
   function safeText(value) {
