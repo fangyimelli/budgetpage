@@ -1,0 +1,110 @@
+<script>
+  const state = {
+    session: null
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('loginForm').addEventListener('submit', onLoginSubmit);
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.querySelectorAll('[data-view]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        switchPanel(button.getAttribute('data-view'));
+      });
+    });
+  });
+
+  function onLoginSubmit(event) {
+    event.preventDefault();
+    const account = document.getElementById('account').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const errorElement = document.getElementById('loginError');
+    errorElement.textContent = '';
+
+    google.script.run
+      .withSuccessHandler(function (response) {
+        state.session = response;
+        renderApp(response);
+      })
+      .withFailureHandler(function (error) {
+        errorElement.textContent = error && error.message ? error.message : '登入失敗，請稍後再試。';
+      })
+      .authenticateUser(account, password);
+  }
+
+  function renderApp(data) {
+    document.getElementById('loginView').classList.remove('active');
+    document.getElementById('appView').classList.add('active');
+    document.getElementById('welcomeName').textContent = data.user.name || '使用者';
+    document.getElementById('welcomeMeta').textContent = '使用者 ID：' + safeText(data.user.user_id) + '｜計畫名稱：' + safeText(data.summary.project_name);
+
+    document.getElementById('summaryName').textContent = safeText(data.user.name);
+    document.getElementById('summaryUserId').textContent = safeText(data.user.user_id);
+    document.getElementById('summaryProject').textContent = safeText(data.summary.project_name);
+    document.getElementById('summaryBudget').textContent = safeText(data.summary['業務費']);
+    document.getElementById('summarySpent').textContent = safeText(data.summary['實支+未核銷']);
+    document.getElementById('summaryBalance').textContent = safeText(data.summary['餘額']);
+    document.getElementById('summaryRate').textContent = safeText(data.summary['支用率']);
+
+    renderDetails(data.details || []);
+    switchPanel('summary');
+  }
+
+  function renderDetails(details) {
+    const tbody = document.getElementById('detailsBody');
+    tbody.innerHTML = '';
+
+    if (!details.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">尚無資料</td></tr>';
+      return;
+    }
+
+    details.forEach(function (row) {
+      const tr = document.createElement('tr');
+      const statusClass = row['狀態'] === '已開傳票' ? 'status-issued' : 'status-pending';
+      tr.innerHTML = [
+        '<td>' + escapeHtml(row['實支']) + '</td>',
+        '<td>' + escapeHtml(row['日期']) + '</td>',
+        '<td>' + escapeHtml(row['傳票']) + '</td>',
+        '<td>' + escapeHtml(row['類別']) + '</td>',
+        '<td>' + escapeHtml(row['購案編號']) + '</td>',
+        '<td>' + escapeHtml(row['金額']) + '</td>',
+        '<td class="description-cell"><button type="button" title="' + escapeHtml(row['說明']) + '" data-full-description="' + escapeHtml(row['說明']) + '">' + escapeHtml(row['說明簡短']) + '</button></td>',
+        '<td><span class="status-pill ' + statusClass + '">' + escapeHtml(row['狀態']) + '</span></td>'
+      ].join('');
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-full-description]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        alert(button.getAttribute('data-full-description'));
+      });
+    });
+  }
+
+  function switchPanel(panelName) {
+    document.getElementById('summaryPanel').classList.toggle('active', panelName === 'summary');
+    document.getElementById('detailsPanel').classList.toggle('active', panelName === 'details');
+  }
+
+  function logout() {
+    state.session = null;
+    document.getElementById('appView').classList.remove('active');
+    document.getElementById('loginView').classList.add('active');
+    document.getElementById('loginForm').reset();
+    document.getElementById('loginError').textContent = '';
+    document.getElementById('detailsBody').innerHTML = '<tr><td colspan="8" class="empty">尚無資料</td></tr>';
+  }
+
+  function safeText(value) {
+    return value == null ? '' : String(value);
+  }
+
+  function escapeHtml(value) {
+    return safeText(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+</script>
