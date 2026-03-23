@@ -1,3 +1,4 @@
+const SPREADSHEET_ID = '1Upk2sB_jL-olofQw9p6-68npCtqcvX1v0lYAW0ZuEOo';
 const SHEET_NAMES = {
   USERS: 'users',
   SUMMARY: 'budget_summary'
@@ -18,123 +19,154 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+function getSpreadsheet() {
+  try {
+    return SpreadsheetApp.openById(SPREADSHEET_ID);
+  } catch (error) {
+    throw createAppError_('無法開啟 Google Sheet，請確認 SPREADSHEET_ID 與權限設定。', error);
+  }
+}
+
 function authenticateUser(account, password) {
-  account = normalizeValue(account);
-  password = normalizeValue(password);
+  return runSafely_(function() {
+    account = normalizeValue(account);
+    password = normalizeValue(password);
 
-  if (!account || !password) {
-    throw new Error('請輸入帳號與密碼。');
-  }
+    if (!account || !password) {
+      throw createAppError_('請輸入帳號與密碼。');
+    }
 
-  const users = getUsersData_();
-  const matchedUser = users.find(function(user) {
-    return normalizeValue(user.account) === account && normalizeValue(user.password) === password;
+    const users = getUsersData_();
+    const matchedUser = users.find(function(user) {
+      return normalizeValue(user.account) === account && normalizeValue(user.password) === password;
+    });
+
+    if (!matchedUser) {
+      throw createAppError_('帳號或密碼錯誤，請重新確認。');
+    }
+
+    return buildUserSession_(matchedUser);
   });
-
-  if (!matchedUser) {
-    throw new Error('帳號或密碼錯誤，請重新確認。');
-  }
-
-  return {
-    user: {
-      user_id: matchedUser.user_id,
-      project_name: matchedUser.project_name,
-      name: matchedUser.name,
-      email: matchedUser.email
-    },
-    summary: getBudgetSummaryByUserId(matchedUser.user_id, matchedUser),
-    details: getUserDetails(matchedUser.user_id)
-  };
 }
 
 function getUsers() {
-  return getUsersData_().map(function(user) {
-    return {
-      user_id: user.user_id,
-      project_name: user.project_name,
-      name: user.name,
-      email: user.email
-    };
+  return runSafely_(function() {
+    return getUsersData_().map(function(user) {
+      return {
+        user_id: user.user_id,
+        project_name: user.project_name,
+        name: user.name,
+        email: user.email
+      };
+    });
   });
 }
 
 function getBudgetSummary(userId) {
-  return getBudgetSummaryByUserId(userId);
+  return runSafely_(function() {
+    return getBudgetSummaryByUserId(userId);
+  });
 }
 
 function getUserBudgetDetails(userId) {
-  return getUserDetails(userId);
+  return runSafely_(function() {
+    return getUserDetails(userId);
+  });
+}
+
+function getUserDashboard(userId) {
+  return runSafely_(function() {
+    const user = getUserById_(userId);
+    return buildUserSession_(user);
+  });
 }
 
 function sendMonthlyBudgetEmails() {
-  const users = getUsersData_();
-  const summarySheet = getSheetByName_(SHEET_NAMES.SUMMARY);
-  const summaryRows = getSheetRecords_(summarySheet, SUMMARY_HEADERS);
-  const summaryMap = {};
+  return runSafely_(function() {
+    const users = getUsersData_();
+    const summaryRows = getBudgetSummaryRecords_();
+    const summaryMap = {};
 
-  summaryRows.forEach(function(row) {
-    const key = normalizeValue(row.user_id);
-    if (key) {
-      summaryMap[key] = row;
-    }
-  });
-
-  users.forEach(function(user) {
-    const email = normalizeValue(user.email);
-    if (!email) {
-      return;
-    }
-
-    const summary = summaryMap[normalizeValue(user.user_id)];
-    if (!summary) {
-      return;
-    }
-
-    const projectName = normalizeValue(summary.project_name) || normalizeValue(user.project_name);
-    const body = [
-      user.name + ' 您好：',
-      '',
-      '以下是您本月的預算使用情況：',
-      '使用者姓名：' + displayText_(user.name),
-      '使用者 ID：' + displayText_(user.user_id),
-      '計畫名稱：' + displayText_(projectName),
-      '業務費：' + formatCellValue_(summary['業務費']),
-      '實支+未核銷：' + formatCellValue_(summary['實支+未核銷']),
-      '餘額：' + formatCellValue_(summary['餘額']),
-      '支用率：' + formatRate_(summary['支用率']),
-      '',
-      '如需確認明細，請登入個人預算查詢網站查看。',
-      '',
-      '此為系統自動寄送通知，敬請參考。'
-    ].join('\n');
-
-    MailApp.sendEmail({
-      to: email,
-      subject: '【每月預算通知】您的預算使用情況',
-      body: body
+    summaryRows.forEach(function(row) {
+      const key = normalizeValue(row.user_id);
+      if (key) {
+        summaryMap[key] = row;
+      }
     });
+
+    users.forEach(function(user) {
+      const email = normalizeValue(user.email);
+      if (!email) {
+        return;
+      }
+
+      const userId = normalizeValue(user.user_id);
+      const summary = summaryMap[userId];
+      if (!summary) {
+        throw createAppError_('找不到使用者 ' + userId + ' 的 budget_summary 資料，無法寄送月報。');
+      }
+
+      const projectName = normalizeValue(summary.project_name) || normalizeValue(user.project_name);
+      const body = [
+        user.name + ' 您好：',
+        '',
+        '以下是您本月的預算使用情況：',
+        '使用者姓名：' + displayText_(user.name),
+        '使用者 ID：' + displayText_(user.user_id),
+        '計畫名稱：' + displayText_(projectName),
+        '業務費：' + formatCellValue_(summary['業務費']),
+        '實支+未核銷：' + formatCellValue_(summary['實支+未核銷']),
+        '餘額：' + formatCellValue_(summary['餘額']),
+        '支用率：' + formatRate_(summary['支用率']),
+        '',
+        '如需確認明細，請登入個人預算查詢網站查看。',
+        '',
+        '此為系統自動寄送通知，敬請參考。'
+      ].join('\n');
+
+      MailApp.sendEmail({
+        to: email,
+        subject: '【每月預算通知】您的預算使用情況',
+        body: body
+      });
+    });
+
+    return '每月預算通知已寄送完成，共寄送 ' + users.filter(function(user) {
+      return normalizeValue(user.email) !== '';
+    }).length + ' 筆。';
   });
+}
+
+function buildUserSession_(userRecord) {
+  const userId = normalizeValue(userRecord.user_id);
+  return {
+    user: {
+      user_id: userId,
+      project_name: userRecord.project_name,
+      name: userRecord.name,
+      email: userRecord.email
+    },
+    summary: getBudgetSummaryByUserId(userId, userRecord),
+    details: getUserDetails(userId)
+  };
 }
 
 function getBudgetSummaryByUserId(userId, userRecord) {
   const normalizedUserId = normalizeValue(userId);
   if (!normalizedUserId) {
-    throw new Error('缺少 user_id，無法讀取 summary。');
+    throw createAppError_('缺少 user_id，無法讀取 budget_summary。');
   }
 
-  const summarySheet = getSheetByName_(SHEET_NAMES.SUMMARY);
-  const summaryRows = getSheetRecords_(summarySheet, SUMMARY_HEADERS);
+  const summaryRows = getBudgetSummaryRecords_();
   const summaryRow = summaryRows.find(function(row) {
     return normalizeValue(row.user_id) === normalizedUserId;
   });
 
   if (!summaryRow) {
-    throw new Error('找不到此使用者的預算摘要資料。');
+    throw createAppError_('找不到使用者 ' + normalizedUserId + ' 的 budget_summary 資料。');
   }
 
-  const user = userRecord || getUsersData_().find(function(row) {
-    return normalizeValue(row.user_id) === normalizedUserId;
-  });
+  const user = userRecord || getUserById_(normalizedUserId);
 
   return {
     user_id: normalizedUserId,
@@ -150,10 +182,10 @@ function getBudgetSummaryByUserId(userId, userRecord) {
 function getUserDetails(userId) {
   const normalizedUserId = normalizeValue(userId);
   if (!normalizedUserId) {
-    throw new Error('缺少 user_id，無法讀取明細資料。');
+    throw createAppError_('缺少 user_id，無法讀取個人明細。');
   }
 
-  const detailSheet = getSheetByName_(normalizedUserId);
+  const detailSheet = getUserDetailSheet_(normalizedUserId);
   const records = getDetailRecords_(detailSheet);
 
   return records.sort(function(a, b) {
@@ -188,20 +220,62 @@ function shortenDescription(description, maxLength) {
 }
 
 function getUsersData_() {
-  const sheet = getSheetByName_(SHEET_NAMES.USERS);
+  const sheet = getUsersSheet_();
   return getSheetRecords_(sheet, USER_HEADERS);
 }
 
-function getSheetByName_(sheetName) {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+function getBudgetSummaryRecords_() {
+  const sheet = getBudgetSummarySheet_();
+  return getSheetRecords_(sheet, SUMMARY_HEADERS);
+}
+
+function getUserById_(userId) {
+  const normalizedUserId = normalizeValue(userId);
+  if (!normalizedUserId) {
+    throw createAppError_('缺少 user_id，無法讀取 users 資料。');
+  }
+
+  const user = getUsersData_().find(function(row) {
+    return normalizeValue(row.user_id) === normalizedUserId;
+  });
+
+  if (!user) {
+    throw createAppError_('找不到使用者資料：' + normalizedUserId);
+  }
+
+  return user;
+}
+
+function getUsersSheet_() {
+  return getRequiredSheet_(SHEET_NAMES.USERS, '找不到 users 分頁');
+}
+
+function getBudgetSummarySheet_() {
+  return getRequiredSheet_(SHEET_NAMES.SUMMARY, '找不到 budget_summary 分頁');
+}
+
+function getUserDetailSheet_(userId) {
+  return getRequiredSheet_(userId, '找不到使用者分頁：' + userId);
+}
+
+function getRequiredSheet_(sheetName, errorMessage) {
+  const spreadsheet = getSpreadsheet();
+  if (!spreadsheet) {
+    throw createAppError_('無法取得 Google Sheet 物件。');
+  }
+
   const sheet = spreadsheet.getSheetByName(sheetName);
   if (!sheet) {
-    throw new Error('找不到工作表：' + sheetName);
+    throw createAppError_(errorMessage || ('找不到分頁：' + sheetName));
   }
   return sheet;
 }
 
 function getSheetRecords_(sheet, requiredHeaders) {
+  if (!sheet) {
+    throw createAppError_('讀取工作表失敗：sheet 不存在。');
+  }
+
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) {
     return [];
@@ -213,7 +287,7 @@ function getSheetRecords_(sheet, requiredHeaders) {
 
   (requiredHeaders || []).forEach(function(requiredHeader) {
     if (headers.indexOf(requiredHeader) === -1) {
-      throw new Error('工作表「' + sheet.getName() + '」缺少欄位：' + requiredHeader);
+      throw createAppError_('工作表「' + sheet.getName() + '」缺少欄位：' + requiredHeader);
     }
   });
 
@@ -231,6 +305,10 @@ function getSheetRecords_(sheet, requiredHeaders) {
 }
 
 function getDetailRecords_(sheet) {
+  if (!sheet) {
+    throw createAppError_('讀取個人明細失敗：sheet 不存在。');
+  }
+
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) {
     return [];
@@ -239,9 +317,13 @@ function getDetailRecords_(sheet) {
   const headerRow = values[0].map(function(header) {
     return normalizeValue(header);
   });
-  const useHeaderMapping = DETAIL_HEADERS.every(function(header) {
-    return headerRow.indexOf(header) !== -1;
+  const missingHeaders = DETAIL_HEADERS.filter(function(header) {
+    return headerRow.indexOf(header) === -1;
   });
+
+  if (missingHeaders.length) {
+    throw createAppError_('工作表「' + sheet.getName() + '」缺少欄位：' + missingHeaders.join('、'));
+  }
 
   return values.slice(1).filter(function(row) {
     return row.some(function(cell) {
@@ -249,17 +331,42 @@ function getDetailRecords_(sheet) {
     });
   }).map(function(row) {
     const record = {};
-    if (useHeaderMapping) {
-      DETAIL_HEADERS.forEach(function(header) {
-        record[header] = row[headerRow.indexOf(header)];
-      });
-    } else {
-      DETAIL_HEADERS.forEach(function(header, index) {
-        record[header] = row[index];
-      });
-    }
+    DETAIL_HEADERS.forEach(function(header) {
+      record[header] = row[headerRow.indexOf(header)];
+    });
     return record;
   });
+}
+
+function runSafely_(callback) {
+  try {
+    return callback();
+  } catch (error) {
+    throw toUserError_(error);
+  }
+}
+
+function createAppError_(message, originalError) {
+  const error = new Error(message);
+  error.name = 'AppError';
+  if (originalError) {
+    error.originalError = originalError;
+    if (originalError.stack) {
+      error.stack = originalError.stack;
+    }
+  }
+  return error;
+}
+
+function toUserError_(error) {
+  if (error && error.name === 'AppError') {
+    return error;
+  }
+
+  const message = error && error.message
+    ? '系統發生錯誤：' + error.message
+    : '系統發生錯誤，請稍後再試。';
+  return createAppError_(message, error);
 }
 
 function normalizeValue(value) {
